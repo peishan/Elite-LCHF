@@ -10,9 +10,18 @@ jobs:
     permissions:
       pages: write
       id-token: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
       - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: .   # root folder (where index.html lives)
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
