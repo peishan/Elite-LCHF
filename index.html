@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Elite LCHF Tracker</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --primary: #0F5132; --primary-light: #1A7A4E; --primary-soft: #D1FAE5;
@@ -65,15 +64,6 @@ body {
 .day-pill.active .day-name, .day-pill.active .day-num { color: white; }
 .day-pill.active .keto-ring { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.2); }
 .day-pill.has-data .keto-ring { border-color: var(--accent); background: var(--primary-soft); }
-.day-pill.disabled {
-  opacity: 0.3;
-  pointer-events: none;
-  background: #F3F4F6;
-}
-.day-pill.disabled .day-num,
-.day-pill.disabled .day-name {
-  color: #9CA3AF;
-}
 .ring-container { display: flex; flex-direction: column; align-items: center; padding: 20px 0; }
 .main-ring { width: 160px; height: 160px; position: relative; }
 .main-ring svg { transform: rotate(-90deg); }
@@ -238,19 +228,44 @@ body {
 .quick-tag { cursor: pointer; transition: all 0.15s; }
 .quick-tag:hover { background: var(--primary-soft); }
 .quick-tag:active { transform: scale(0.95); }
-.sync-status {
-  position: fixed; top: 70px; right: 16px;
-  background: var(--primary-soft); color: var(--primary);
-  padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;
-  z-index: 300; opacity: 0; transition: opacity 0.3s;
+
+/* Save/Load Styles */
+.save-load-section { margin: 12px 16px; }
+.save-load-btn {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white; border: none; padding: 14px 20px; border-radius: 14px;
+  font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+  margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all 0.2s;
 }
-.sync-status.show { opacity: 1; }
+.save-load-btn.secondary-btn {
+  background: white; color: var(--primary); border: 2px solid var(--primary);
+}
+.save-load-btn:active { transform: scale(0.98); }
+.save-key-box {
+  background: #F3F4F6; border: 2px dashed #D1D5DB; border-radius: 14px;
+  padding: 14px; margin: 10px 0; font-family: 'Courier New', monospace;
+  font-size: 11px; word-break: break-all; line-height: 1.5; color: var(--text);
+  max-height: 120px; overflow-y: auto;
+}
+.load-input {
+  width: 100%; padding: 14px; border: 2px solid #E5E7EB; border-radius: 14px;
+  font-size: 13px; font-family: 'Courier New', monospace; outline: none;
+  resize: vertical; min-height: 80px; margin-bottom: 10px;
+}
+.load-input:focus { border-color: var(--accent); }
+.data-summary {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0;
+}
+.data-summary-item {
+  background: var(--primary-soft); border-radius: 12px; padding: 12px; text-align: center;
+}
+.data-summary-item .number { font-size: 20px; font-weight: 700; color: var(--primary); }
+.data-summary-item .label { font-size: 11px; color: var(--text-light); margin-top: 2px; }
 </style>
 </head>
 <body>
 <div class="toast" id="toast"></div>
-<div class="sync-status" id="sync-status">&#9729; Synced</div>
-
 <!-- HOME SCREEN -->
 <div class="screen active" id="screen-home">
 <div class="app-header">
@@ -268,16 +283,8 @@ body {
 <div style="font-size:12px; color:#B45309; font-weight:600;">days</div>
 </div>
 
-<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 16px;">
-  <button onclick="changeMonth(-1)" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--primary); font-weight:700;">&larr;</button>
-  <div id="month-label" style="font-size:16px; font-weight:700; color:var(--text);">June 2026</div>
-  <button onclick="changeMonth(1)" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--primary); font-weight:700;">&rarr;</button>
-</div>
 <div class="calendar-strip" id="calendar-strip"></div>
-<div style="padding:8px 16px; display:flex; gap:8px;">
-  <input type="date" id="date-picker" max="" min="" style="flex:1; padding:10px; border:2px solid #E5E7EB; border-radius:12px; font-size:14px; font-family:inherit;" onchange="pickDate(this.value)">
-  <button onclick="goToToday()" style="background:var(--primary); color:white; border:none; padding:10px 16px; border-radius:12px; font-weight:600; cursor:pointer; font-size:13px;">Today</button>
-</div>
+<div class="scroll-hint">swipe for more days</div>
 
 <div class="card">
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -383,7 +390,6 @@ body {
 <div class="food-results" id="food-results"></div>
 <div style="height:120px;"></div>
 </div>
-
 <!-- STATS SCREEN -->
 <div class="screen" id="screen-stats">
 <div class="app-header">
@@ -511,6 +517,41 @@ points="40,160 80,160 120,160 160,160 200,160 240,160 280,160 320,160 340,160 34
 </div>
 </div>
 
+<!-- SAVE / LOAD PROGRESS SECTION -->
+<div class="card">
+<h3 style="font-size:15px; font-weight:700; margin-bottom:12px;">&#128190; Save & Load Progress</h3>
+<p style="font-size:13px; color:var(--text-light); line-height:1.6; margin-bottom:14px;">
+Export your data as a portable key, or load a previously saved key to restore your progress.
+</p>
+
+<div class="data-summary" id="data-summary">
+<div class="data-summary-item"><div class="number" id="summary-days">0</div><div class="label">Days Logged</div></div>
+<div class="data-summary-item"><div class="number" id="summary-meals">0</div><div class="label">Total Meals</div></div>
+<div class="data-summary-item"><div class="number" id="summary-weights">0</div><div class="label">Weight Entries</div></div>
+<div class="data-summary-item"><div class="number" id="summary-streak">0</div><div class="label">Day Streak</div></div>
+</div>
+
+<button class="save-load-btn" onclick="generateSaveKey()">
+<span>&#128229;</span> Generate Save Key
+</button>
+
+<div id="save-output" style="display:none;">
+<div style="font-size:12px; font-weight:600; color:var(--text-light); margin-bottom:6px;">Your Save Key (copy this):</div>
+<div class="save-key-box" id="save-key-text"></div>
+<button class="save-load-btn secondary-btn" onclick="copySaveKey()">
+<span>&#128203;</span> Copy to Clipboard
+</button>
+</div>
+
+<hr style="border:none; border-top:1px solid #E5E7EB; margin:16px 0;">
+
+<div style="font-size:12px; font-weight:600; color:var(--text-light); margin-bottom:8px;">Load Progress from Key:</div>
+<textarea class="load-input" id="load-key-input" placeholder="Paste your save key here..."></textarea>
+<button class="save-load-btn secondary-btn" onclick="loadFromKey()">
+<span>&#128230;</span> Load Progress
+</button>
+</div>
+
 <div class="card">
 <h3 style="font-size:15px; font-weight:700; margin-bottom:12px;">About the Food Database</h3>
 <p style="font-size:13px; color:var(--text-light); line-height:1.6;">
@@ -590,12 +631,6 @@ This app uses a curated <strong>LCHF-optimized food database</strong> with verif
 </div>
 
 <script>
-// ============== SUPABASE SETUP ==============
-const SUPABASE_URL = 'https://bxpjzaazxqirsvzipios.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4cGp6YWF6eHFpcnN2emlwaW9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNzQxNjQsImV4cCI6MjA5Nzg1MDE2NH0.6F2VvMmaHVMbh3CFyNzXJ3W5TvVtn2kUpWe-0SgQe6k';
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 // ============== LCHF FOOD DATABASE ==============
 const foodDB = [
 {name:"Butter Unsalted",emoji:"Butter",kcal:717,protein:0.9,fat:81.1,carbs:0.1,fiber:0,unit:"tbsp",unitG:14.2,tags:["fat","dairy"]},
@@ -693,9 +728,7 @@ const foodDB = [
 {name:"Chicken Masala (No Sauce)",emoji:"Chicken Masala",kcal:200,protein:25,fat:10,carbs:3,fiber:1,unit:"serving",unitG:200,tags:["protein","fat","local"]},
 {name:"Poppadom (1 pc)",emoji:"Poppadom",kcal:50,protein:2,fat:2,carbs:7,fiber:1,unit:"piece",unitG:15,tags:["low-carb","local"]},
 {name:"Wonton (2 pcs)",emoji:"Wontons",kcal:120,protein:6,fat:5,carbs:14,fiber:1,unit:"serving",unitG:60,tags:["protein","fat","local"]},
-
 {name:"Sio Bak with Okra Tempeh",emoji:"Sio Bak Meal",kcal:450,protein:18,fat:38,carbs:6,fiber:3,unit:"serving",unitG:250,tags:["fat","protein","local"]},
-
 {name:"Steamed Pork with Mackerel",emoji:"Steamed Pork Fish",kcal:280,protein:22,fat:20,carbs:2,fiber:0,unit:"serving",unitG:200,tags:["protein","fat","local"]},
 {name:"Doubao with Mushrooms",emoji:"Doubao Mushrooms",kcal:150,protein:8,fat:10,carbs:6,fiber:3,unit:"serving",unitG:200,tags:["protein","fat","local"]},
 {name:"Chobani Greek Yogurt (Late Night)",emoji:"Chobani LN",kcal:59,protein:10,fat:0,carbs:4,fiber:0,unit:"cup",unitG:150,tags:["protein","dairy"]},
@@ -756,152 +789,152 @@ let weightHistory = [
   {date: '2026-06-15', weight: 87.9},
 ];
 
-// ============== SUPABASE SYNC FUNCTIONS ==============
+// Sample data from user's log (Day 31-36)
+const sampleData = {
+  '2026-06-10': [
+    {name: 'Eggs', qty: 3, unit: 'piece', meal: 'Breakfast'},
+    {name: 'Fish/Chicken', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Sardines in Olive Oil', qty: 1, unit: 'can', meal: 'Snack'},
+    {name: 'Mums Veggies/Meat', qty: 1, unit: 'serving', meal: 'Dinner'},
+  ],
+  '2026-06-11': [
+    {name: 'Eggs', qty: 3, unit: 'piece', meal: 'Breakfast'},
+    {name: 'Fish', qty: 1, unit: 'piece', meal: 'Lunch'},
+    {name: 'Drumstick', qty: 1, unit: 'piece', meal: 'Lunch'},
+    {name: 'Sardines in Olive Oil', qty: 1, unit: 'can', meal: 'Snack'},
+    {name: 'Sahara Yogurt', qty: 1, unit: 'cup', meal: 'Dinner'},
+    {name: 'Veg/Meat', qty: 1, unit: 'serving', meal: 'Dinner'},
+  ],
+  '2026-06-12': [
+    {name: 'Takeaway Egg Pork Veg (No Rice)', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Lu Egg', qty: 1, unit: 'piece', meal: 'Dinner'},
+    {name: 'Veggies', qty: 1, unit: 'serving', meal: 'Dinner'},
+    {name: 'Pork', qty: 1, unit: 'serving', meal: 'Dinner'},
+  ],
+  '2026-06-13': [
+    {name: 'Eggs', qty: 3, unit: 'piece', meal: 'Breakfast'},
+    {name: 'Chayote', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Hei mu er (Wood Ear Mushroom)', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Pork', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Egg Omelette with Veg', qty: 1, unit: 'serving', meal: 'Dinner'},
+    {name: 'Meats', qty: 1, unit: 'serving', meal: 'Dinner'},
+  ],
+  '2026-06-14': [
+    {name: 'Salmon Steak with Cream', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Salad (No Corn)', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Mungbean Soup with Pork (No Sugar)', qty: 0.5, unit: 'cup', meal: 'Dinner'},
+  ],
+  '2026-06-15': [
+    {name: 'Eggs', qty: 3, unit: 'piece', meal: 'Breakfast'},
+    {name: 'Veggies Mock Meat (No Flour)', qty: 1, unit: 'serving', meal: 'Lunch'},
+    {name: 'Cucur Sayur (1 pc)', qty: 1, unit: 'piece', meal: 'Lunch'},
+    {name: 'Hei mu er (Wood Ear Mushroom)', qty: 1, unit: 'serving', meal: 'Dinner'},
+    {name: 'Mixed Veggies with Jersey APC', qty: 1, unit: 'serving', meal: 'Dinner'},
+    {name: 'Sahara Yogurt (Gut Shield)', qty: 1, unit: 'cup', meal: 'Dinner'},
+  ],
+};
 
-function showSyncStatus(msg) {
-  const el = document.getElementById('sync-status');
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2000);
+// Load sample data
+dailyLog = sampleData;
+
+// ============== SAVE / LOAD SYSTEM ==============
+function generateSaveKey() {
+  const data = {
+    v: 1,
+    t: targets,
+    dl: dailyLog,
+    wh: weightHistory,
+    sd: selectedDate.toISOString().split('T')[0]
+  };
+  const jsonStr = JSON.stringify(data);
+  const encoded = btoa(encodeURIComponent(jsonStr));
+  document.getElementById('save-key-text').textContent = encoded;
+  document.getElementById('save-output').style.display = 'block';
+  updateDataSummary();
+  showToast('Save key generated!');
 }
 
-async function loadFromSupabase() {
+function copySaveKey() {
+  const keyText = document.getElementById('save-key-text').textContent;
+  if (!keyText) return;
+  navigator.clipboard.writeText(keyText).then(() => {
+    showToast('Copied to clipboard!');
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = keyText;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Copied to clipboard!');
+  });
+}
+
+function loadFromKey() {
+  const input = document.getElementById('load-key-input').value.trim();
+  if (!input) {
+    showToast('Please paste a save key first');
+    return;
+  }
   try {
-    showSyncStatus('☁️ Loading...');
-    
-    // Load food logs
-    const { data: logs, error: logError } = await supabase
-      .from('lchf_logs')
-      .select('*')
-      .order('created_at', { ascending: true });
-    
-    if (logError) throw logError;
-    
-    // Rebuild dailyLog from Supabase rows
-    dailyLog = {};
-    if (logs) {
-      logs.forEach(row => {
-        if (!dailyLog[row.date_key]) dailyLog[row.date_key] = [];
-        dailyLog[row.date_key].push({
-          name: row.food_name,
-          qty: row.qty,
-          unit: row.unit,
-          meal: row.meal_type,
-          supabaseId: row.id
-        });
-      });
+    const decoded = decodeURIComponent(atob(input));
+    const data = JSON.parse(decoded);
+    if (data.v !== 1) {
+      showToast('Invalid save key version');
+      return;
     }
-    
-    // Load weights
-    const { data: weights, error: weightError } = await supabase
-      .from('lchf_weights')
-      .select('*')
-      .order('created_at', { ascending: true });
-    
-    if (weightError) throw weightError;
-    
-    if (weights && weights.length > 0) {
-      weightHistory = weights.map(w => ({
-        date: w.date_key,
-        weight: w.weight,
-        supabaseId: w.id
-      }));
-    }
-    
-    showSyncStatus('☁️ Synced');
+    if (data.t) targets = data.t;
+    if (data.dl) dailyLog = data.dl;
+    if (data.wh) weightHistory = data.wh;
+    if (data.sd) selectedDate = new Date(data.sd);
+
+    // Update UI
+    document.getElementById('setting-calories').value = targets.calories;
+    document.getElementById('setting-carbs').value = targets.carbs;
+    document.getElementById('setting-protein').value = targets.protein;
+    document.getElementById('setting-fat').value = targets.fat;
+    document.getElementById('display-calories').textContent = targets.calories + ' kcal';
+    document.getElementById('display-carbs').textContent = targets.carbs + 'g';
+    document.getElementById('display-protein').textContent = targets.protein + 'g';
+    document.getElementById('display-fat').textContent = targets.fat + 'g';
+
+    document.getElementById('load-key-input').value = '';
+    updateDataSummary();
     renderCalendar();
     renderHome();
     renderStats();
-  } catch (err) {
-    console.error('Supabase load error:', err);
-    showSyncStatus('⚠️ Offline mode');
-    // Fall back to LocalStorage if available
-    loadFromLocalStorage();
-    renderHome();
+    showToast('Progress loaded successfully!');
+  } catch (e) {
+    showToast('Invalid save key. Please check and try again.');
+    console.error(e);
   }
 }
 
-async function saveLogToSupabase(dateKey, entry) {
-  try {
-    const food = foodDB.find(f => f.name === entry.name);
-    const grams = entry.unit === 'g' ? entry.qty : entry.qty * (food?.unitG || 100);
-    const ratio = grams / 100;
-    
-    const row = {
-      date_key: dateKey,
-      food_name: entry.name,
-      qty: entry.qty,
-      unit: entry.unit,
-      meal_type: entry.meal,
-      kcal: food ? Math.round(food.kcal * ratio) : 0,
-      protein: food ? Math.round(food.protein * ratio * 10) / 10 : 0,
-      carbs: food ? Math.round(food.carbs * ratio * 10) / 10 : 0,
-      fat: food ? Math.round(food.fat * ratio * 10) / 10 : 0,
-      fiber: food ? Math.round((food.fiber || 0) * ratio * 10) / 10 : 0
-    };
-    
-    const { data, error } = await supabase
-      .from('lchf_logs')
-      .insert([row])
-      .select();
-    
-    if (error) throw error;
-    
-    // Store the Supabase ID for future reference
-    if (data && data[0]) {
-      entry.supabaseId = data[0].id;
+function updateDataSummary() {
+  const daysLogged = Object.keys(dailyLog).length;
+  let totalMeals = 0;
+  Object.values(dailyLog).forEach(day => totalMeals += day.length);
+  const weightEntries = weightHistory.length;
+
+  // Calculate streak
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    if (dailyLog[key] && dailyLog[key].length > 0) {
+      streak++;
+    } else if (i > 0) {
+      break;
     }
-    
-    showSyncStatus('☁️ Saved');
-    return true;
-  } catch (err) {
-    console.error('Supabase save error:', err);
-    showSyncStatus('⚠️ Saved locally');
-    showToast('Error: ' + err.message);
-    saveToLocalStorage();
-    return false;
   }
-}
 
-async function saveWeightToSupabase(dateKey, weight) {
-  try {
-    const { data, error } = await supabase
-      .from('lchf_weights')
-      .insert([{ date_key: dateKey, weight: weight }])
-      .select();
-    
-    if (error) throw error;
-    
-    showSyncStatus('☁️ Weight saved');
-    return true;
-  } catch (err) {
-    console.error('Supabase weight save error:', err);
-    showSyncStatus('⚠️ Saved locally');
-    showToast('Error: ' + err.message);
-    return false;
-  }
-}
-
-// ============== LOCAL STORAGE FALLBACK ==============
-
-function saveToLocalStorage() {
-  localStorage.setItem('lchf_dailyLog', JSON.stringify(dailyLog));
-  localStorage.setItem('lchf_weightHistory', JSON.stringify(weightHistory));
-  localStorage.setItem('lchf_targets', JSON.stringify(targets));
-}
-
-function loadFromLocalStorage() {
-  const savedLog = localStorage.getItem('lchf_dailyLog');
-  const savedWeights = localStorage.getItem('lchf_weightHistory');
-  const savedTargets = localStorage.getItem('lchf_targets');
-  
-  if (savedLog) dailyLog = JSON.parse(savedLog);
-  if (savedWeights) weightHistory = JSON.parse(savedWeights);
-  if (savedTargets) targets = JSON.parse(savedTargets);
-  
-  renderCalendar();
-  renderHome();
-  renderStats();
+  document.getElementById('summary-days').textContent = daysLogged;
+  document.getElementById('summary-meals').textContent = totalMeals;
+  document.getElementById('summary-weights').textContent = weightEntries;
+  document.getElementById('summary-streak').textContent = streak;
+  document.getElementById('streak-count').textContent = streak;
 }
 
 // ============== SCREEN NAVIGATION ==============
@@ -914,113 +947,44 @@ function showScreen(screenId) {
   currentScreen = screenId;
   if (screenId === 'screen-home') renderHome();
   if (screenId === 'screen-stats') renderStats();
+  if (screenId === 'screen-settings') updateDataSummary();
 }
 
 // ============== CALENDAR ==============
-let calendarMonth = new Date();
-
-// Helper: get YYYY-MM-DD in local timezone
-function localDateKey(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 function renderCalendar() {
   const strip = document.getElementById('calendar-strip');
   const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
   const today = new Date();
-  today.setHours(0,0,0,0);
-  
-  const centerDate = new Date(selectedDate);
-  centerDate.setHours(0,0,0,0);
-  
   let html = '';
-  for (let i = -7; i <= 7; i++) {
-    const d = new Date(centerDate);
-    d.setDate(centerDate.getDate() + i);
-    const dateKey = localDateKey(d);
-    const isSelected = d.getTime() === selectedDate.getTime();
-    const isToday = d.getTime() === today.getTime();
+  for (let i = -3; i <= 10; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dateKey = d.toISOString().split('T')[0];
+    const isToday = i === 0;
     const hasData = dailyLog[dateKey] && dailyLog[dateKey].length > 0;
     const dayName = days[d.getDay()];
     const dayNum = d.getDate();
-    
-    const threeMonthsAgo = new Date(today);
-    threeMonthsAgo.setMonth(today.getMonth() - 3);
-    const isInRange = d >= threeMonthsAgo;
-    
-    html += `<div class="day-pill ${isSelected ? 'active' : ''} ${hasData ? 'has-data' : ''} ${!isInRange ? 'disabled' : ''}" ${isInRange ? `onclick="selectDate('${dateKey}')"` : ''}>
+    html += `<div class="day-pill ${isToday ? 'active' : ''} ${hasData ? 'has-data' : ''}" onclick="selectDate('${dateKey}')">
       <div class="day-name">${dayName}</div>
       <div class="day-num">${dayNum}</div>
       <div class="keto-ring">${hasData ? 'K' : ''}</div>
     </div>`;
   }
   strip.innerHTML = html;
-  
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  document.getElementById('month-label').textContent = `${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
-  
-  const picker = document.getElementById('date-picker');
-  const threeMonthsAgo = new Date(today);
-  threeMonthsAgo.setMonth(today.getMonth() - 3);
-  picker.max = localDateKey(today);
-  picker.min = localDateKey(threeMonthsAgo);
-  picker.value = localDateKey(selectedDate);
-}
-
-function changeMonth(delta) {
-  const newDate = new Date(selectedDate);
-  newDate.setMonth(newDate.getMonth() + delta);
-  
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  if (newDate > today) {
-    selectedDate = new Date(today);
-  } else {
-    const threeMonthsAgo = new Date(today);
-    threeMonthsAgo.setMonth(today.getMonth() - 3);
-    if (newDate < threeMonthsAgo) {
-      selectedDate = new Date(threeMonthsAgo);
-    } else {
-      selectedDate = newDate;
-    }
-  }
-  renderCalendar();
-  renderHome();
-}
-
-function pickDate(dateStr) {
-  if (!dateStr) return;
-  // Parse YYYY-MM-DD as local date
-  const parts = dateStr.split('-');
-  selectedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-  renderCalendar();
-  renderHome();
-}
-
-function goToToday() {
-  selectedDate = new Date();
-  selectedDate.setHours(0,0,0,0);
-  renderCalendar();
-  renderHome();
 }
 
 function selectDate(dateKey) {
-  // Parse YYYY-MM-DD as local date to avoid timezone shift
-  const parts = dateKey.split('-');
-  selectedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  selectedDate = new Date(dateKey);
   renderHome();
 }
 
 // ============== HOME RENDERING ==============
 function renderHome() {
-  const dateKey = localDateKey(selectedDate);
+  const dateKey = selectedDate.toISOString().split('T')[0];
   const meals = dailyLog[dateKey] || [];
-  
+
   let totalKcal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0;
-  
+
   meals.forEach(entry => {
     const food = foodDB.find(f => f.name.toLowerCase().includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(f.name.toLowerCase()));
     if (food) {
@@ -1034,42 +998,42 @@ function renderHome() {
       totalFiber += Math.round((food.fiber || 0) * ratio * 10) / 10;
     }
   });
-  
+
   const netCarbs = Math.max(0, Math.round((totalCarbs - totalFiber) * 10) / 10);
-  
+
   // Update ring
   const ring = document.getElementById('cal-ring');
   const pct = Math.min(totalKcal / targets.calories, 1);
   const offset = 440 - (440 * pct);
   ring.style.strokeDashoffset = offset;
-  
+
   document.getElementById('total-kcal').textContent = totalKcal;
   document.getElementById('goal-kcal').textContent = targets.calories;
-  
+
   // Update macros
   document.getElementById('val-protein').textContent = totalProtein.toFixed(1);
   document.getElementById('target-protein').textContent = targets.protein;
   document.getElementById('bar-protein').style.width = Math.min((totalProtein / targets.protein) * 100, 100) + '%';
-  
+
   document.getElementById('val-carbs').textContent = netCarbs.toFixed(1);
   document.getElementById('target-carbs').textContent = targets.carbs;
   document.getElementById('bar-carbs').style.width = Math.min((netCarbs / targets.carbs) * 100, 100) + '%';
-  
+
   document.getElementById('val-fat').textContent = totalFat.toFixed(1);
   document.getElementById('target-fat').textContent = targets.fat;
   document.getElementById('bar-fat').style.width = Math.min((totalFat / targets.fat) * 100, 100) + '%';
-  
+
   // Update status badges
   updateStatus('protein', totalProtein, targets.protein);
   updateStatus('carbs', netCarbs, targets.carbs);
   updateStatus('fat', totalFat, targets.fat);
-  
+
   // Update mood emoji
   const emoji = document.getElementById('mood-emoji');
-  if (netCarbs <= 20) emoji.textContent = '🔥';
-  else if (netCarbs <= 30) emoji.textContent = '⚡';
-  else emoji.textContent = '💪';
-  
+  if (netCarbs <= 20) emoji.textContent = 'Deep Ketosis';
+  else if (netCarbs <= 30) emoji.textContent = 'Keto Zone';
+  else emoji.textContent = 'Keep Going';
+
   // Ketone meter
   const ketonePct = Math.min((netCarbs / 50) * 100, 100);
   document.getElementById('ketone-fill').style.width = (100 - ketonePct) + '%';
@@ -1078,7 +1042,7 @@ function renderHome() {
   if (netCarbs > 25) ketoneLabel = 'Light Ketosis';
   if (netCarbs > 40) ketoneLabel = 'Out of Ketosis';
   document.getElementById('ketone-label').textContent = ketoneLabel;
-  
+
   // Render meals
   renderMeals(meals);
 }
@@ -1111,14 +1075,14 @@ function renderMeals(meals) {
     </div>`;
     return;
   }
-  
+
   const mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
   let html = '';
-  
+
   mealTypes.forEach(mt => {
     const mealItems = meals.filter(m => m.meal === mt);
     if (mealItems.length === 0) return;
-    
+
     let mealKcal = 0;
     mealItems.forEach(entry => {
       const food = foodDB.find(f => f.name.toLowerCase().includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(f.name.toLowerCase()));
@@ -1128,14 +1092,14 @@ function renderMeals(meals) {
         mealKcal += Math.round(food.kcal * (grams / 100));
       }
     });
-    
+
     const emojis = {'Breakfast':'&#127859;','Lunch':'&#127857;','Dinner':'&#127860;','Snack':'&#127810;'};
     html += `<div class="meal-section">
       <div class="meal-header">
         <h3>${emojis[mt]} ${mt}</h3>
         <span class="meal-kcal">${mealKcal} kcal</span>
       </div>`;
-    
+
     mealItems.forEach(entry => {
       const food = foodDB.find(f => f.name.toLowerCase().includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(f.name.toLowerCase()));
       if (food) {
@@ -1158,10 +1122,9 @@ function renderMeals(meals) {
     });
     html += `</div>`;
   });
-  
+
   container.innerHTML = html;
 }
-
 // ============== FOOD SEARCH ==============
 function searchFoods(query) {
   const results = document.getElementById('food-results');
@@ -1174,7 +1137,7 @@ function searchFoods(query) {
     f.name.toLowerCase().includes(q) || 
     f.tags.some(t => t.includes(q))
   ).slice(0, 15);
-  
+
   let html = '';
   matches.forEach(food => {
     const netCarbs = (food.carbs - (food.fiber || 0)).toFixed(1);
@@ -1198,7 +1161,7 @@ function quickAdd(name) {
 function openQtyModal(foodName) {
   selectedFood = foodDB.find(f => f.name === foodName);
   if (!selectedFood) return;
-  
+
   document.getElementById('modal-food-name').textContent = selectedFood.name;
   document.getElementById('modal-food-subtitle').textContent = `1 ${selectedFood.unit} = ${selectedFood.unitG}g`;
   document.getElementById('qty-value').value = 1;
@@ -1219,7 +1182,7 @@ function updatePreview() {
   let grams = qty * selectedFood.unitG;
   if (unit === 'g') grams = qty;
   const ratio = grams / 100;
-  
+
   document.getElementById('preview-kcal').textContent = Math.round(selectedFood.kcal * ratio);
   document.getElementById('preview-carbs').textContent = Math.round((selectedFood.carbs - (selectedFood.fiber || 0)) * ratio * 10) / 10 + 'g';
   document.getElementById('preview-protein').textContent = Math.round(selectedFood.protein * ratio * 10) / 10 + 'g';
@@ -1229,28 +1192,20 @@ function updatePreview() {
 document.getElementById('qty-value').addEventListener('input', updatePreview);
 document.getElementById('qty-unit').addEventListener('change', updatePreview);
 
-async function confirmAddFood() {
+function confirmAddFood() {
   if (!selectedFood) return;
   const qty = parseFloat(document.getElementById('qty-value').value) || 1;
   const unit = document.getElementById('qty-unit').value;
-  const dateKey = localDateKey(selectedDate);
-  
+  const dateKey = selectedDate.toISOString().split('T')[0];
+
   if (!dailyLog[dateKey]) dailyLog[dateKey] = [];
-  const entry = {
+  dailyLog[dateKey].push({
     name: selectedFood.name,
     qty: qty,
     unit: unit,
     meal: selectedMealType
-  };
-  dailyLog[dateKey].push(entry);
-  
-  // Save to Supabase
-  await saveLogToSupabase(dateKey, entry);
-  
-  // Also save to LocalStorage as fallback
-  saveToLocalStorage();
-  renderHome();
-  
+  });
+
   closeModal();
   showToast(`${selectedFood.name} added to ${selectedMealType}!`);
   showScreen('screen-home');
@@ -1283,22 +1238,15 @@ function openTimePicker() {
 }
 
 // ============== WEIGHT LOGGING ==============
-async function logWeight() {
+function logWeight() {
   const input = document.getElementById('weight-input');
   const weight = parseFloat(input.value);
   if (!weight || weight < 30 || weight > 200) {
     showToast('Please enter a valid weight');
     return;
   }
-  const dateKey = localDateKey(selectedDate);
+  const dateKey = selectedDate.toISOString().split('T')[0];
   weightHistory.push({date: dateKey, weight: weight});
-  
-  // Save to Supabase
-  await saveWeightToSupabase(dateKey, weight);
-  
-  // Also save to LocalStorage
-  saveToLocalStorage();
-  
   input.value = '';
   showToast(`Weight ${weight}kg logged!`);
   renderStats();
@@ -1318,7 +1266,7 @@ function renderStats() {
     {fat: 125, protein: 78, carbs: 16},
     {fat: 140, protein: 88, carbs: 14},
   ];
-  
+
   let html = '';
   weeklyData.forEach((d, i) => {
     const max = 200;
@@ -1347,7 +1295,6 @@ function updateSetting(type, value) {
     fat: `${value}g`
   };
   document.getElementById(`display-${type}`).textContent = displayMap[type];
-  saveToLocalStorage();
 }
 
 // ============== TOAST ==============
@@ -1359,16 +1306,12 @@ function showToast(msg) {
 }
 
 // ============== INIT ==============
-async function init() {
-  // Ensure selectedDate is today in local timezone
-  selectedDate = new Date();
-  selectedDate.setHours(0,0,0,0);
-  
-  // Load from Supabase first, fallback to LocalStorage
-  await loadFromSupabase();
-  
+function init() {
+  renderCalendar();
+  renderHome();
   renderStats();
-  
+  updateDataSummary();
+
   // Set default time
   const now = new Date();
   const hours = now.getHours();
@@ -1377,7 +1320,7 @@ async function init() {
   const m = now.getMinutes().toString().padStart(2, '0');
   selectedTime = `${h}:${m} ${ampm}`;
   document.getElementById('selected-time').textContent = selectedTime;
-  
+
   // Auto-select meal type based on time
   if (hours < 11) selectedMealType = 'Breakfast';
   else if (hours < 15) selectedMealType = 'Lunch';
